@@ -7,6 +7,9 @@ import lombok.Setter;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * AllocatedServers - POJO class for list of servers allocated in a region, corresponding total CPUs and their total price
+ */
 @Getter
 @Setter
 @Builder

@@ -8,10 +8,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Objects;
 
+/**
+ * Main class of resource allocator
+ */
 public class ResourceAllocatorMain {
 
     private static Logger logger = LoggerFactory.getLogger(ResourceAllocatorMain.class);
 
+    /**
+     * The main method. Entry point of application.
+     *
+     * @param args the input arguments
+     * @throws AllocatorException the allocator exception
+     */
     public static void main(String[] args) throws AllocatorException {
         try (InputStream serverTypesInputStream = Objects.requireNonNull(Allocator.class.getClassLoader().getResource("server.types.json")).openStream();
              InputStream regionCostPerHourInputStream = Objects.requireNonNull(Allocator.class.getClassLoader().getResource("region.cost.per.hour.json")).openStream()

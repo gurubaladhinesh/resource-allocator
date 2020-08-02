@@ -16,6 +16,9 @@ import java.util.stream.Collectors;
 import static com.techguru.allocator.constants.AllocatorConstants.*;
 import static com.techguru.allocator.util.AllocatorUtils.*;
 
+/**
+ * Allocator - Master class which allocates server resources
+ */
 public class Allocator {
     private static final Logger logger = LoggerFactory.getLogger(Allocator.class);
 
@@ -25,14 +28,33 @@ public class Allocator {
     private Allocator() {
     }
 
+    /**
+     * Instantiates a new Allocator.
+     *
+     * @param serverTypesJsonInputStream       the server types json input stream
+     * @param regionCostPerHourJsonInputStream the region cost per hour json input stream
+     * @throws AllocatorException the allocator exception
+     */
     public Allocator(InputStream serverTypesJsonInputStream, InputStream regionCostPerHourJsonInputStream) throws AllocatorException {
         this.load(serverTypesJsonInputStream, regionCostPerHourJsonInputStream);
     }
 
+    /**
+     * Instantiates a new Allocator.
+     *
+     * @param serverTypesJson       the server types json
+     * @param regionCostPerHourJson the region cost per hour json
+     * @throws AllocatorException the allocator exception
+     */
     public Allocator(String serverTypesJson, String regionCostPerHourJson) throws AllocatorException {
         this.load(serverTypesJson, regionCostPerHourJson);
     }
 
+    /**
+     * Validation: 1. If input is a json 2. Input serverTypes json contains all server types contained in regionCostPerHour json
+     * Calculation: Created a new map similar to regionCostPerHour json where srever-types in each region are sorted based on 'cost per hour per CPU'
+     * Initialization: Assign the calculated regionCostPerHourPerCpu json and serverTypes json to object fields
+     */
     private void load(String serverTypesJson, String regionCostPerHourJson) throws AllocatorException {
         Gson gson = new Gson();
 
@@ -80,6 +102,15 @@ public class Allocator {
         }
     }
 
+    /**
+     * Allocates server resources based on the user input parameters
+     *
+     * @param hours the required # of hours of resources
+     * @param cpus  the required # of cpus
+     * @param price the maximum price allowed for the allocation
+     * @return the costs, cpus if allocated for each region
+     * @throws AllocatorException the allocator exception
+     */
     public String getCosts(Integer hours, Integer cpus, Double price) throws AllocatorException {
         Gson gson = new Gson();
         List<Result> resultList = new ArrayList<>();
@@ -106,6 +137,11 @@ public class Allocator {
         return gson.toJson(resultList);
     }
 
+    /**
+     * Allocation - Allocate servers in each region by
+     *      1.  Hours
+     *      2.  Cpus
+     */
     private AllocatedServers allocateServersByCpus(LinkedHashMap<String, Double> costPerHourMap, Integer hours, Integer targetCpus) {
         List<Map<String, Integer>> allocatedServersList = new ArrayList<>();
 
@@ -129,6 +165,11 @@ public class Allocator {
         return AllocatedServers.builder().allocatedServersList(allocatedServersList).totalCpus(totalCpus).totalCost(round(totalCost, 2)).build();
     }
 
+    /**
+     * Allocation - Allocate servers in each region by
+     *      1.  Hours
+     *      2.  Price
+     */
     private AllocatedServers allocatedServersByPrice(LinkedHashMap<String, Double> costPerHourMap, Integer hours, Double targetPrice) {
         List<Map<String, Integer>> allocatedServersList = new ArrayList<>();
 
@@ -153,6 +194,12 @@ public class Allocator {
         return AllocatedServers.builder().allocatedServersList(allocatedServersList).totalCpus(totalCpus).totalCost(round(totalCost, 2)).build();
     }
 
+    /**
+     * Allocation - Allocate servers in each region by
+     *      1.  Hours
+     *      2.  Cpus
+     *      3.  Price
+     */
     private AllocatedServers allocatedServersByCpusAndPrice(LinkedHashMap<String, Double> costPerHourMap, Integer hours, Integer targetCpus, Double targetPrice) {
         List<Map<String, Integer>> allocatedServersList = new ArrayList<>();
 
