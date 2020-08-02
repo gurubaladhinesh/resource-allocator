@@ -35,4 +35,4 @@ Output:
 ## Solution
 1.  Calculate the 'cost per hour per CPU' for each of the server-type in each region using both inputs.
 2.  Sort the input regionCostPerHourJson json for each region based on the calculated value.
-3.  Allocated resources in each region based on the sorted json
+3.  Allocate resources in each region based on the sorted json
