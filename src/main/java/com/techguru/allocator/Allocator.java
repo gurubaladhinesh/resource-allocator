@@ -10,15 +10,15 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.text.NumberFormat;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static com.techguru.allocator.constants.AllocatorConstants.*;
+import static com.techguru.allocator.util.AllocatorUtils.*;
 
 public class Allocator {
     private static final Logger logger = LoggerFactory.getLogger(Allocator.class);
 
-    private InputStream serverTypesJsonInputStream;
-    private InputStream regionCostPerHourJsonInputStream;
     private Map<String, Integer> serverTypes;
     private Map<String, LinkedHashMap<String, Double>> regionCostPerHourPerCpu;
 
@@ -26,80 +26,84 @@ public class Allocator {
     }
 
     public Allocator(InputStream serverTypesJsonInputStream, InputStream regionCostPerHourJsonInputStream) throws AllocatorException {
-        this.serverTypesJsonInputStream = serverTypesJsonInputStream;
-        this.regionCostPerHourJsonInputStream = regionCostPerHourJsonInputStream;
-        this.load();
+        this.load(serverTypesJsonInputStream, regionCostPerHourJsonInputStream);
+    }
+
+    public Allocator(String serverTypesJson, String regionCostPerHourJson) throws AllocatorException {
+        this.load(serverTypesJson, regionCostPerHourJson);
+    }
+
+    private void load(String serverTypesJson, String regionCostPerHourJson) throws AllocatorException {
+        Gson gson = new Gson();
+
+        //Validation - Check if input jsons are valid
+        validate(serverTypesJson);
+        validate(regionCostPerHourJson);
+
+        this.serverTypes = gson.fromJson(serverTypesJson, new TypeToken<Map<String, Integer>>() {
+        }.getType());
+        Map<String, Map<String, Double>> regionCostPerHour = gson.fromJson(regionCostPerHourJson, new TypeToken<Map<String, Map<String, Double>>>() {
+        }.getType());
+
+        //Validation - All server types in each region should be available in server types json
+        for (Map.Entry<String, Map<String, Double>> e1 : regionCostPerHour.entrySet()) {
+            String region = e1.getKey();
+            Map<String, Double> costPerHourMap = e1.getValue();
+            for (Map.Entry<String, Double> e2 : costPerHourMap.entrySet()) {
+                String serverType = e2.getKey();
+                if (!this.serverTypes.containsKey(serverType)) {
+                    String message = "Invalid server type " + serverType + " in region " + region;
+                    throw new AllocatorException(message);
+                }
+            }
+        }
+
+        this.regionCostPerHourPerCpu = new LinkedHashMap<>();
+        regionCostPerHour.forEach((region, costPerHourMap) -> {
+            LinkedHashMap<String, Double> costPerHourPerCpu = costPerHourMap.entrySet().stream().sorted(Comparator.comparingDouble(e -> e.getValue() / this.serverTypes.get(e.getKey()))
+            ).collect(Collectors.toMap(
+                    Map.Entry::getKey,
+                    Map.Entry::getValue,
+                    (oldValue, newValue) -> oldValue, LinkedHashMap::new));
+            this.regionCostPerHourPerCpu.put(region, costPerHourPerCpu);
+        });
+    }
+
+    private void load(InputStream serverTypesJsonInputStream, InputStream regionCostPerHourJsonInputStream) throws AllocatorException {
+        try {
+            String serverTypesJson = new String(serverTypesJsonInputStream.readAllBytes());
+            String regionCostPerHourJson = new String(regionCostPerHourJsonInputStream.readAllBytes());
+            load(serverTypesJson, regionCostPerHourJson);
+        } catch (IOException e) {
+            String message = "Exception while creating allocator";
+            throw new AllocatorException(message, e);
+        }
     }
 
     public String getCosts(Integer hours, Integer cpus, Double price) throws AllocatorException {
-        logger.info("Allocating {} cpus for {} hours at price ${}", cpus, hours, price);
         Gson gson = new Gson();
         List<Result> resultList = new ArrayList<>();
         if (hours == null) throw new AllocatorException("Hours cannot be null");
         if (cpus == null && price == null) throw new AllocatorException("Cpus and Price cannot be null");
 
+        if (cpus != null && price == null) logger.info(LOG_ALLOCATE_BYCPUS, cpus, hours);
+        else if (cpus == null) logger.info(LOG_ALLOCATE_BYPRICE, hours, price);
+        else logger.info(LOG_ALLOCATE_BYCPUS_BYPRICE, cpus, hours, price);
+
         for (Map.Entry<String, LinkedHashMap<String, Double>> e1 : this.regionCostPerHourPerCpu.entrySet()) { // for each region
             String region = e1.getKey();
             LinkedHashMap<String, Double> costPerHourMap = e1.getValue();
-            Result result = new Result();
-            result.setRegion(region);
             AllocatedServers allocatedServers;
             if (cpus != null && price == null)
                 allocatedServers = allocateServersByCpus(costPerHourMap, hours, cpus);
-            else if (price != null && cpus == null)
+            else if (cpus == null)
                 allocatedServers = allocatedServersByPrice(costPerHourMap, hours, price);
             else
                 allocatedServers = allocatedServersByCpusAndPrice(costPerHourMap, hours, cpus, price);
-            result.setTotalCpus(allocatedServers.getTotalCpus());
-            result.setTotalCost(dollarValue(allocatedServers.getTotalCost()));
-            result.setServers(allocatedServers.getAllocatedServersList());
+            Result result = Result.builder().region(region).totalCpus(allocatedServers.getTotalCpus()).totalCost(dollarValue(allocatedServers.getTotalCost())).servers(allocatedServers.getAllocatedServersList()).build();
             resultList.add(result);
         }
         return gson.toJson(resultList);
-    }
-
-    private void load() throws AllocatorException {
-        try {
-            Gson gson = new Gson();
-            String serverTypesJson = new String(serverTypesJsonInputStream.readAllBytes());
-            String regionCostPerHourJson = new String(regionCostPerHourJsonInputStream.readAllBytes());
-            this.serverTypes = gson.fromJson(serverTypesJson, new TypeToken<Map<String, Integer>>() {
-            }.getType());
-            Map<String, Map<String, Double>> regionCostPerHour = gson.fromJson(regionCostPerHourJson, new TypeToken<Map<String, Map<String, Double>>>() {
-            }.getType());
-
-            //Validation - All server types in each region should be available in server types json
-            for (Map.Entry<String, Map<String, Double>> e1 : regionCostPerHour.entrySet()) {
-                String region = e1.getKey();
-                Map<String, Double> costPerHourMap = e1.getValue();
-                for (Map.Entry<String, Double> e2 : costPerHourMap.entrySet()) {
-                    String serverType = e2.getKey();
-                    if (!this.serverTypes.containsKey(serverType)) {
-                        String message = "Invalid server type " + serverType + " in region " + region;
-                        throw new AllocatorException(message);
-                    }
-                }
-            }
-
-            this.regionCostPerHourPerCpu = new LinkedHashMap<>();
-            regionCostPerHour.forEach((region, costPerHourMap) -> {
-                LinkedHashMap<String, Double> costPerHourPerCpu = costPerHourMap.entrySet().stream().sorted(Comparator.comparingDouble(e -> e.getValue() / this.serverTypes.get(e.getKey()))
-                ).collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        Map.Entry::getValue,
-                        (oldValue, newValue) -> oldValue, LinkedHashMap::new));
-                this.regionCostPerHourPerCpu.put(region, costPerHourPerCpu);
-            });
-        } catch (IOException e) {
-            String message = "Exception while creating allocator";
-            logger.error(message, e);
-            throw new AllocatorException(message, e);
-        }
-    }
-
-    private double round(double value, int decimalPlaces) {
-        double scale = Math.pow(10, decimalPlaces);
-        return Math.round(value * scale) / scale;
     }
 
     private AllocatedServers allocateServersByCpus(LinkedHashMap<String, Double> costPerHourMap, Integer hours, Integer targetCpus) {
@@ -173,7 +177,4 @@ public class Allocator {
         return AllocatedServers.builder().allocatedServersList(allocatedServersList).totalCpus(totalCpus).totalCost(round(totalCost, 2)).build();
     }
 
-    private String dollarValue(Double value) {
-        return NumberFormat.getCurrencyInstance(Locale.US).format(value);
-    }
 }

@@ -22,7 +22,6 @@ public class ResourceAllocatorMain {
             logger.info(allocator.getCosts(7, 214, 95.0));
         } catch (IOException e) {
             String message = "Exception in processing one of the inputs";
-            logger.error(message, e);
             throw new AllocatorException(message, e);
         }
     }

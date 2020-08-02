@@ -4,13 +4,14 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import lombok.Builder;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 @JsonInclude(Include.NON_NULL)
 @JsonPropertyOrder({"region", "total_cpus", "total_cost", "servers"})
+@Builder
 public class Result {
     @JsonProperty("region")
     private String region;
@@ -19,10 +20,7 @@ public class Result {
     @JsonProperty("total_cost")
     private String totalCost;
     @JsonProperty("servers")
-    private List<Map<String, Integer>> servers = new ArrayList();
-
-    public Result() {
-    }
+    private List<Map<String, Integer>> servers;
 
     @JsonProperty("region")
     public String getRegion() {

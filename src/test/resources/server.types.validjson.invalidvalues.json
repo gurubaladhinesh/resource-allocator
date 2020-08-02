@@ -1,0 +1,7 @@
+{
+  "large": 1,
+  "xlarge": 2,
+  "2xlarge": 4,
+  "4xlarge": 8,
+  "10xlarge": 32
+}
